@@ -1,0 +1,364 @@
+@page "/produto/{Id:long}"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode(prerender: false))
+
+@using Supabase.Postgrest.Attributes
+@using Supabase.Postgrest.Models
+@using Microsoft.AspNetCore.Components
+
+@inject NavigationManager Navigation
+@inject Supabase.Client Supabase
+
+<div class="home-container">
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="auth-message error-message page-message">
+            @errorMessage
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="category-card">
+            <h4>A carregar produto...</h4>
+            <span>Espera só um bocadinho.</span>
+        </div>
+    }
+    else if (product == null)
+    {
+        <div class="category-card">
+            <h4>Produto não encontrado</h4>
+            <span>Não foi possível encontrar este produto.</span>
+        </div>
+    }
+    else
+    {
+        <div class="product-detail-hero">
+            <div class="product-detail-main">
+
+                <a href="javascript:history.back()" class="back-arrow">←</a>
+
+
+                <div class="product-detail-image-box">
+                    <img src="@GetImage(product.Nome)" alt="@product.Nome" class="product-detail-image" />
+                </div>
+
+                <div class="product-detail-info">
+
+                    <h1>@product.Nome</h1>
+
+                    <div class="product-detail-meta-inline">
+                        <span><b>Marca:</b> @(string.IsNullOrWhiteSpace(product.Marca) ? "-" : product.Marca)</span>
+                        <span><b>Categoria:</b> @GetCategoryName(product.CategoriaId)</span>
+                        <span><b>Quantidade:</b> @(product.Quantidade?.ToString("0.##") ?? "-") @(product.Unidade ?? "")</span>
+                        <span><b>Código de barras:</b> @(string.IsNullOrWhiteSpace(product.CodigoBarras) ? "-" : product.CodigoBarras)</span>
+                    </div>
+
+                    <div class="featured-actions">
+                        <a href="/precos" class="btn-cartly small-btn">
+                            Ver mais produtos
+                        </a>
+
+                        <a href="/" class="btn-cartly small-btn secondary-btn">
+                            Voltar ao início
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-section">
+            <h3 class="section-title">Registos de preço</h3>
+
+            @if (!priceRecords.Any())
+            {
+                <div class="category-card">
+                    <h4>Sem registos ainda</h4>
+                    <span>Este produto ainda não tem registos de preço.</span>
+                </div>
+            }
+            else
+            {
+                <div class="price-table-wrapper">
+                    <table class="price-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Loja</th>
+                                <th>Valor</th>
+                                <th>Moeda</th>
+                                <th>Credibilidade</th>
+                                <th>Data</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var item in priceRecords.Select((value, index) => new { value, index }))
+                            {
+                                <tr>
+                                    <td class="index-cell">@(item.index + 1)</td>
+
+                                    <td class="store-cell">
+                                        <span class="store-name">@GetStoreName(item.value.LojaId)</span>
+                                    </td>
+
+                                    <td class="price-value">@item.value.Valor.ToString("0.00")</td>
+
+                                    <td class="currency-cell">@item.value.Moeda</td>
+
+                                    <td>
+                                        <div class="credibility-cell">
+                                            <div class="credibility-bar">
+                                                <div class="credibility-fill" style="width:@item.value.GrauCredibilidade%"></div>
+                                            </div>
+                                            <span class="credibility-text">@item.value.GrauCredibilidade%</span>
+                                        </div>
+                                    </td>
+
+                                    <td class="date-cell">@item.value.DataRegisto.ToString("dd/MM/yyyy HH:mm")</td>
+
+                                    <td>
+                                        <span class="status-inline @GetEstadoClass(item.value.Estado)">
+                                        @item.value.Estado
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+
+</div>
+
+@code {
+    [Parameter]
+    public long Id { get; set; }
+
+    private ProductRow? product;
+    private List<PriceRecordRow> priceRecords = new();
+    private List<StoreRow> stores = new();
+
+    private bool isLoading = true;
+    private string errorMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProductData();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadProductData();
+    }
+
+    private async Task LoadProductData()
+    {
+        isLoading = true;
+        errorMessage = "";
+
+        try
+        {
+            var productResponse = await Supabase
+                .From<ProductRow>()
+                .Select("*")
+                .Get();
+
+            var allProducts = productResponse.Models.ToList();
+
+            Console.WriteLine("TOTAL PRODUTOS: " + allProducts.Count);
+            Console.WriteLine("ID PEDIDO: " + Id);
+
+            product = allProducts.FirstOrDefault(p => p.Id == Id);
+
+            if (product == null)
+            {
+                errorMessage = $"Produto com ID {Id} não encontrado.";
+                priceRecords = new List<PriceRecordRow>();
+                stores = new List<StoreRow>();
+                return;
+            }
+
+            var pricesResponse = await Supabase
+                .From<PriceRecordRow>()
+                .Select("*")
+                .Get();
+
+            priceRecords = pricesResponse.Models
+                .Where(r => r.ProdutoId == Id)
+                .OrderByDescending(r => r.DataRegisto)
+                .ToList();
+
+            var storesResponse = await Supabase
+                .From<StoreRow>()
+                .Select("*")
+                .Get();
+
+            stores = storesResponse.Models.ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar produto: {ex.Message}";
+            Console.WriteLine(ex.ToString());
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string GetStoreName(long lojaId)
+    {
+        var loja = stores.FirstOrDefault(x => x.Id == lojaId);
+        return loja?.Nome ?? "-";
+    }
+
+    private static string GetEstadoClass(string? estado)
+    {
+        var normalized = estado?.Trim().ToLower() ?? "";
+
+        return normalized switch
+        {
+            "confirmado" => "status-confirmado",
+            "pendente" => "status-pendente",
+            "rejeitado" => "status-rejeitado",
+            _ => "status-default"
+        };
+    }
+
+    private static string GetEstadoIcon(string? estado)
+{
+    var normalized = estado?.Trim().ToLower() ?? "";
+
+    return normalized switch
+    {
+        "confirmado" => "✓",
+        "pendente" => "!",
+        "rejeitado" => "✕",
+        _ => "•"
+    };
+}
+
+    private string GetImage(string? nome)
+    {
+        var nomeLower = nome?.ToLower() ?? "";
+
+        if (nomeLower.Contains("água") || nomeLower.Contains("agua"))
+            return "/agua.jpg";
+
+        if (nomeLower.Contains("arroz integral"))
+            return "/arrozintegral.jpg";
+
+        if (nomeLower.Contains("arroz"))
+            return "/arroz.jpg";
+
+        if (nomeLower.Contains("café moído") || nomeLower.Contains("cafe moido"))
+            return "/cafemoido.jpg";
+
+        if (nomeLower.Contains("café") || nomeLower.Contains("cafe"))
+            return "/cafe.jpg";
+
+        if (nomeLower.Contains("atum"))
+            return "/atum.jpg";
+
+        if (nomeLower.Contains("esparguete"))
+            return "/esparguete.jpg";
+
+        if (nomeLower.Contains("biscoff"))
+            return "/biscoff.jpg";
+
+        return "/favicon.png";
+    }
+
+    private string GetCategoryName(long categoriaId)
+    {
+        return categoriaId switch
+        {
+            1 => "Laticínios",
+            2 => "Massas",
+            3 => "Café",
+            4 => "Enlatados",
+            5 => "Cereais",
+            6 => "Água",
+            _ => $"Categoria {categoriaId}"
+        };
+    }
+ private void GoBack()
+{
+    var search = product?.Nome?.Split(' ')[0] ?? "";
+    Navigation.NavigateTo($"/precos?search={search}");
+}
+
+    [Table("produto")]
+    public class ProductRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public long Id { get; set; }
+
+        [Column("nome")]
+        public string? Nome { get; set; }
+
+        [Column("categoria_id")]
+        public long CategoriaId { get; set; }
+
+        [Column("criado_em")]
+        public DateTime CriadoEm { get; set; }
+
+        [Column("marca")]
+        public string? Marca { get; set; }
+
+        [Column("codigo_barras")]
+        public string? CodigoBarras { get; set; }
+
+        [Column("unidade")]
+        public string? Unidade { get; set; }
+
+        [Column("quantidade")]
+        public decimal? Quantidade { get; set; }
+    }
+
+    [Table("registo_preco")]
+    public class PriceRecordRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public long Id { get; set; }
+
+        [Column("produto_id")]
+        public long ProdutoId { get; set; }
+
+        [Column("loja_id")]
+        public long LojaId { get; set; }
+
+        [Column("valor")]
+        public decimal Valor { get; set; }
+
+        [Column("moeda")]
+        public string Moeda { get; set; } = "";
+
+        [Column("grau_credibilidade")]
+        public int GrauCredibilidade { get; set; }
+
+        [Column("data_registo")]
+        public DateTime DataRegisto { get; set; }
+
+        [Column("estado")]
+        public string Estado { get; set; } = "";
+    }
+
+    [Table("loja")]
+    public class StoreRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public long Id { get; set; }
+
+        [Column("nome")]
+        public string? Nome { get; set; }
+    }
+}

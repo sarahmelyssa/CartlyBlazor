@@ -1,0 +1,206 @@
+@page "/admin/utilizadores"
+@page "/admin/users"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode(prerender: false))
+
+@using Supabase.Postgrest.Attributes
+@using Supabase.Postgrest.Models
+@using Cartly_Blazor.Models
+
+@inject Cartly_Blazor.Services.AuthService AuthService
+@inject NavigationManager Navigation
+@inject Supabase.Client Supabase
+
+<div class="admin-container">
+
+    <div class="admin-page-header">
+        <div>
+            <h2 class="admin-title">Utilizadores</h2>
+            <p class="admin-subtitle">Gestão dos utilizadores da plataforma.</p>
+        </div>
+
+        <button class="login-btn" @onclick="LoadUsers">
+            Atualizar
+        </button>
+    </div>
+
+    <div class="admin-filters">
+        <div class="admin-search-box">
+            <input class="form-input"
+                   placeholder="Pesquisar por nome, username, telefone ou role..."
+                   @bind="searchTerm"
+                   @bind:event="oninput" />
+        </div>
+    </div>
+
+    <div class="admin-stats-bar">
+        <div class="admin-stat">
+            <span>Total filtrado</span>
+            <strong>@FilteredUsers.Count()</strong>
+        </div>
+
+        <div class="admin-stat">
+            <span>Total geral</span>
+            <strong>@users.Count</strong>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="admin-empty-state">
+            <h3>A carregar...</h3>
+            <p>Estamos a procurar utilizadores na base de dados.</p>
+            <span>Espera só um bocadinho.</span>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="auth-message error-message">
+            @errorMessage
+        </div>
+    }
+    else if (!FilteredUsers.Any())
+    {
+        <div class="admin-empty-state">
+            <h3>👀 Nada encontrado</h3>
+            <p>Não há utilizadores para a pesquisa atual.</p>
+            <span>Tenta outro nome, username, telefone ou role.</span>
+        </div>
+    }
+    else
+    {
+        <div class="admin-table-wrapper">
+            <table class="admin-table">
+                <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Nome</th>
+                    <th>Username</th>
+                    <th>Telefone</th>
+                    <th>Role</th>
+                </tr>
+                </thead>
+
+                <tbody>
+                @foreach (var item in FilteredUsers.Select((value, index) => new { value, index }))
+                {
+                    <tr>
+                        <td>@(item.index + 1)</td>
+                        <td>@(string.IsNullOrWhiteSpace(item.value.Nome) ? "-" : item.value.Nome)</td>
+                        <td>@(string.IsNullOrWhiteSpace(item.value.Username) ? "-" : item.value.Username)</td>
+                        <td>@(string.IsNullOrWhiteSpace(item.value.Telefone) ? "-" : item.value.Telefone)</td>
+                        <td>
+                            <span class="role-badge @(GetRoleClass(item.value.Role))">
+                                @item.value.Role
+                            </span>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+
+</div>
+
+@code {
+
+    private List<AdminUserRow> users = new();
+    private bool isLoading = true;
+    private string errorMessage = "";
+    private string searchTerm = "";
+
+    private const string AdminEmail = "sarahmelyssaramos@gmail.com";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = AuthService.GetCurrentUser();
+
+        if (user == null)
+        {
+            Navigation.NavigateTo("/login", true);
+            return;
+        }
+
+        if (user.Email?.ToLower() != AdminEmail)
+        {
+            Navigation.NavigateTo("/cliente", true);
+            return;
+        }
+
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        isLoading = true;
+        errorMessage = "";
+
+        try
+        {
+            var response = await Supabase
+                .From<AdminUserRow>()
+                .Select("*")
+                .Get();
+
+            users = response.Models
+                .OrderBy(u => u.Nome)
+                .ToList();
+
+            Console.WriteLine("USERS: " + users.Count);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar utilizadores: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private IEnumerable<AdminUserRow> FilteredUsers =>
+        users.Where(UserMatchesSearch);
+
+    private bool UserMatchesSearch(AdminUserRow user)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+            return true;
+
+        var term = searchTerm.Trim();
+
+        return (user.Nome?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+               || (user.Username?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+               || (user.Telefone?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+               || user.Role.ToString().Contains(term, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetRoleClass(AppRole role)
+    {
+        return role switch
+        {
+            AppRole.admin => "role-admin",
+            AppRole.user => "role-user",
+            _ => "role-default"
+        };
+    }
+
+    [Table("utilizadores")]
+    public class AdminUserRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public Guid Id { get; set; }
+
+        [Column("nome")]
+        public string? Nome { get; set; }
+
+        [Column("username")]
+        public string? Username { get; set; }
+
+        [Column("telefone")]
+        public string? Telefone { get; set; }
+
+        [Column("role")]
+        public AppRole Role { get; set; }
+    }
+}

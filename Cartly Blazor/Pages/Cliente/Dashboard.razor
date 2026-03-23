@@ -1,0 +1,195 @@
+@page "/cliente"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode(prerender: false))
+@inject Cartly_Blazor.Services.AuthService AuthService
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="home-container">
+
+    <div class="hero-section client-hero">
+        <div class="hero-badge">Cartly Cliente</div>
+
+        <h1>Encontra os melhores preços sem perder tempo</h1>
+        <p>
+            Pesquisa produtos, compara opções e guarda os teus favoritos num só sítio.
+        </p>
+
+        <div class="search-wrapper">
+            <input class="search-input"
+                   placeholder="Pesquisar produtos, marcas ou categorias..."
+                   @bind="searchText"
+                   @bind:event="oninput"
+                   @onkeydown="HandleKeyDown" />
+
+            <button type="button" class="btn-cartly" @onclick="Pesquisar">
+                Pesquisar
+            </button>
+        </div>
+
+        <div class="hero-shortcuts">
+            <button type="button" class="hero-shortcut-btn" @onclick='() => PesquisarRapido("Leite")'>Leite</button>
+            <button type="button" class="hero-shortcut-btn" @onclick='() => PesquisarRapido("Arroz")'>Arroz</button>
+            <button type="button" class="hero-shortcut-btn" @onclick='() => PesquisarRapido("iPhone")'>iPhone</button>
+            <button type="button" class="hero-shortcut-btn" @onclick='() => PesquisarRapido("Portátil")'>Portátil</button>
+        </div>
+    </div>
+
+    <div class="dashboard-section">
+        <h3 class="section-title">Acesso rápido</h3>
+
+        <div class="client-quick-grid">
+            <div class="quick-card quick-card-primary" @onclick='() => Navigation.NavigateTo("/favoritos")'>
+                <div class="quick-card-icon">❤</div>
+                <div>
+                    <h4>Favoritos</h4>
+                    <span>Ver os produtos que guardaste</span>
+                </div>
+            </div>
+
+            <div class="quick-card" @onclick='() => Navigation.NavigateTo("/perfil")'>
+                <div class="quick-card-icon">👤</div>
+                <div>
+                    <h4>Perfil</h4>
+                    <span>Consultar os teus dados</span>
+                </div>
+            </div>
+
+            <div class="quick-card" @onclick='() => Navigation.NavigateTo("/precos")'>
+                <div class="quick-card-icon">🛒</div>
+                <div>
+                    <h4>Explorar produtos</h4>
+                    <span>Ver todos os produtos disponíveis</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-section">
+        <h3 class="section-title">Explorar por categoria</h3>
+
+        <div class="categories-grid">
+            <div class="category-card clickable-card" @onclick='() => PesquisarCategoria("Laticínios")'>
+                <h4>Laticínios</h4>
+                <span>Leite, iogurtes e manteiga</span>
+            </div>
+
+            <div class="category-card clickable-card" @onclick='() => PesquisarCategoria("Mercearia")'>
+                <h4>Mercearia</h4>
+                <span>Arroz, massa e básicos</span>
+            </div>
+
+            <div class="category-card clickable-card" @onclick='() => PesquisarCategoria("Tecnologia")'>
+                <h4>Tecnologia</h4>
+                <span>Telemóveis, portáteis e mais</span>
+            </div>
+
+            <div class="category-card clickable-card" @onclick='() => PesquisarCategoria("Limpeza")'>
+                <h4>Limpeza</h4>
+                <span>Detergentes e utilidades</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-section">
+        <h3 class="section-title">Sugestões rápidas</h3>
+
+        <div class="suggestions-grid">
+            <div class="suggestion-card" @onclick='() => Navigation.NavigateTo("/precos?search=Leite Mimosa")'>
+                <h4>Leite Mimosa 1L</h4>
+                <p>Ver onde está mais barato.</p>
+                <span>Pesquisar agora</span>
+            </div>
+
+            <div class="suggestion-card" @onclick='() => Navigation.NavigateTo("/precos?search=Arroz")'>
+                <h4>Arroz</h4>
+                <p>Comparar preços entre lojas.</p>
+                <span>Pesquisar agora</span>
+            </div>
+
+            <div class="suggestion-card" @onclick='() => Navigation.NavigateTo("/precos?search=iPhone")'>
+                <h4>iPhone</h4>
+                <p>Ver opções em lojas tecnológicas.</p>
+                <span>Pesquisar agora</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-section">
+        <h3 class="section-title">Produto em destaque</h3>
+
+        <div class="featured-highlight">
+            <div class="featured-left">
+                <div class="featured-tag">Destaque</div>
+                <h4>iPhone 15</h4>
+                <p>Um dos produtos mais procurados. Compara preços rapidamente e guarda nos favoritos.</p>
+
+                <div class="featured-actions">
+                    <button type="button"
+                            class="btn-cartly small-btn"
+                            @onclick='() => Navigation.NavigateTo("/precos?search=iPhone 15")'>
+                        Ver produto
+                    </button>
+
+                    <button type="button"
+                            class="btn-cartly small-btn secondary-btn"
+                            @onclick='() => Navigation.NavigateTo("/favoritos")'>
+                        Ver favoritos
+                    </button>
+                </div>
+            </div>
+
+            <div class="featured-price-box">
+                <span>Desde</span>
+                <strong>799€</strong>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+@code {
+    private string? userNome;
+    private string searchText = "";
+
+    protected override void OnInitialized()
+    {
+        var user = AuthService.GetCurrentUser();
+
+        if (user == null)
+        {
+            Navigation.NavigateTo("/login", true);
+            return;
+        }
+
+        if (user.UserMetadata != null && user.UserMetadata.ContainsKey("nome"))
+            userNome = user.UserMetadata["nome"]?.ToString();
+    }
+
+    private void Pesquisar()
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            Navigation.NavigateTo("/precos");
+            return;
+        }
+
+        Navigation.NavigateTo($"/precos?search={Uri.EscapeDataString(searchText.Trim())}");
+    }
+
+    private void PesquisarCategoria(string categoria)
+    {
+        Navigation.NavigateTo($"/precos?search={Uri.EscapeDataString(categoria)}");
+    }
+
+    private void PesquisarRapido(string termo)
+    {
+        searchText = termo;
+        Navigation.NavigateTo($"/precos?search={Uri.EscapeDataString(termo)}");
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            Pesquisar();
+    }
+}

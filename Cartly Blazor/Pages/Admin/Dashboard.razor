@@ -1,0 +1,237 @@
+@page "/admin"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode(prerender: false))
+
+@using Supabase.Postgrest.Attributes
+@using Supabase.Postgrest.Models
+@using Microsoft.AspNetCore.Components.Web
+
+@inject Cartly_Blazor.Services.AuthService AuthService
+@inject NavigationManager Navigation
+@inject Supabase.Client Supabase
+
+<div class="admin-container">
+
+    <div class="admin-page-header">
+        <div>
+            <h2 class="admin-title">Visão geral da plataforma.</h2>
+        </div>
+
+        <button class="login-btn" @onclick="LoadDashboard">
+            Atualizar
+        </button>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span>Utilizadores</span>
+            <strong>@totalUsers</strong>
+        </div>
+
+        <div class="stat-card">
+            <span>Produtos</span>
+            <strong>@totalProducts</strong>
+        </div>
+
+        <div class="stat-card">
+            <span>Lojas</span>
+            <strong>@totalStores</strong>
+        </div>
+
+        <div class="stat-card">
+            <span>Registos</span>
+            <strong>@totalPrices</strong>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="admin-empty-state">
+            <h3>A carregar...</h3>
+            <p>A preparar o dashboard.</p>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="auth-message error-message">
+            @errorMessage
+        </div>
+    }
+    else
+    {
+        <div class="admin-table-wrapper">
+            <h3 class="section-title">Últimos Registos</h3>
+
+            @if (recentPrices.Count == 0)
+            {
+                <div class="admin-empty-state" style="margin: 12px;">
+                    <h3>👀 Sem registos ainda</h3>
+                    <p>Não existem registos de preço para mostrar.</p>
+                </div>
+            }
+            else
+            {
+                <table class="admin-table">
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Produto</th>
+                        <th>Loja</th>
+                        <th>Valor</th>
+                        <th>Data</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+                    @foreach (var item in recentPrices.Select((value, index) => new { value, index }))
+                    {
+                        <tr>
+                            <td>@(item.index + 1)</td>
+                            <td>@(item.value.Produto?.Nome ?? "-")</td>
+                            <td>@(item.value.Loja?.Nome ?? "-")</td>
+                            <td>@item.value.Valor.ToString("0.00") €</td>
+                            <td>@item.value.DataRegisto.ToString("dd/MM/yyyy HH:mm")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            }
+        </div>
+    }
+
+</div>
+
+@code {
+    private int totalUsers;
+    private int totalProducts;
+    private int totalStores;
+    private int totalPrices;
+
+    private List<PriceRow> recentPrices = new();
+    private bool isLoading = true;
+    private string errorMessage = "";
+
+    private const string AdminEmail = "sarahmelyssaramos@gmail.com";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = AuthService.GetCurrentUser();
+
+        if (user == null)
+        {
+            Navigation.NavigateTo("/login", true);
+            return;
+        }
+
+        if (user.Email?.Trim().ToLower() != AdminEmail)
+        {
+            Navigation.NavigateTo("/cliente", true);
+            return;
+        }
+
+        await LoadDashboard();
+    }
+
+    private async Task LoadDashboard()
+    {
+        isLoading = true;
+        errorMessage = "";
+
+        try
+        {
+            var users = await Supabase
+                .From<UserRow>()
+                .Select("*")
+                .Get();
+
+            var products = await Supabase
+                .From<ProductRow>()
+                .Select("*")
+                .Get();
+
+            var stores = await Supabase
+                .From<StoreRow>()
+                .Select("*")
+                .Get();
+
+            var prices = await Supabase
+                .From<PriceRow>()
+                .Select("id, valor, data_registo, produto:produto_id(nome), loja:loja_id(nome)")
+                .Get();
+
+            totalUsers = users.Models.Count;
+            totalProducts = products.Models.Count;
+            totalStores = stores.Models.Count;
+            totalPrices = prices.Models.Count;
+
+            recentPrices = prices.Models
+                .OrderByDescending(p => p.DataRegisto)
+                .Take(5)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar dashboard: {ex.Message}";
+            Console.WriteLine(errorMessage);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    [Table("utilizadores")]
+    public class UserRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public Guid Id { get; set; }
+    }
+
+    [Table("produto")]
+    public class ProductRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public long Id { get; set; }
+    }
+
+    [Table("loja")]
+    public class StoreRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public long Id { get; set; }
+    }
+
+    [Table("registo_preco")]
+    public class PriceRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public long Id { get; set; }
+
+        [Column("valor")]
+        public decimal Valor { get; set; }
+
+        [Column("data_registo")]
+        public DateTime DataRegisto { get; set; }
+
+        [Column("produto")]
+        public ProdutoRef? Produto { get; set; }
+
+        [Column("loja")]
+        public LojaRef? Loja { get; set; }
+    }
+
+    public class ProdutoRef
+    {
+        [Column("nome")]
+        public string? Nome { get; set; }
+    }
+
+    public class LojaRef
+    {
+        [Column("nome")]
+        public string? Nome { get; set; }
+    }
+}

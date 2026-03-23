@@ -1,0 +1,204 @@
+@page "/perfil"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode(prerender: false))
+
+@using Supabase.Postgrest.Attributes
+@using Supabase.Postgrest.Models
+
+@inject Cartly_Blazor.Services.AuthService AuthService
+@inject NavigationManager Navigation
+@inject Supabase.Client Supabase
+
+<div class="home-container">
+
+    <div class="profile-wrapper">
+
+        <div>
+            <h2 class="section-title">Perfil</h2>
+            <p style="color:#6b7280; margin-top:-10px;">
+                Consulta os teus dados e os atalhos principais da tua conta.
+            </p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="auth-message error-message page-message">
+                @errorMessage
+            </div>
+        }
+
+        @if (isLoading)
+        {
+            <div class="profile-card">
+                <h4>A carregar perfil...</h4>
+                <span>Espera um bocadinho.</span>
+            </div>
+        }
+        else if (user == null || currentProfile == null)
+        {
+            <div class="profile-card">
+                <h4>Utilizador não encontrado</h4>
+                <span>Faz login novamente.</span>
+            </div>
+        }
+        else
+        {
+            <div class="profile-card-main">
+                <div class="profile-avatar">
+                    @GetInitials()
+                </div>
+
+                <div>
+                    <h3 style="margin:0 0 6px 0;">@DisplayNome</h3>
+                    <p style="color:#6b7280; margin:0;">@email</p>
+                </div>
+            </div>
+
+            <div>
+                <h4 class="section-title" style="margin-top:10px;">Informações pessoais</h4>
+
+                <div class="profile-details-grid">
+                    <div class="profile-detail-card">
+                        <span>Nome</span>
+                        <strong>@DisplayNome</strong>
+                    </div>
+
+                    <div class="profile-detail-card">
+                        <span>Username</span>
+                        <strong>@DisplayUsername</strong>
+                    </div>
+
+                    <div class="profile-detail-card">
+                        <span>Email</span>
+                        <strong>@email</strong>
+                    </div>
+
+                    <div class="profile-detail-card">
+                        <span>Telefone</span>
+                        <strong>@DisplayTelefone</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h4 class="section-title" style="margin-top:10px;">Ações rápidas</h4>
+
+                <div class="profile-actions">
+                    <a href="/editar-perfil" class="btn-cartly profile-link-btn">
+                        Editar perfil
+                    </a>
+
+                    <a href="/favoritos" class="btn-cartly secondary-btn profile-link-btn">
+                        Favoritos
+                    </a>
+                </div>
+            </div>
+        }
+
+    </div>
+
+</div>
+
+@code {
+    private Supabase.Gotrue.User? user;
+    private Guid? currentUserId;
+    private PerfilRow? currentProfile;
+
+    private bool isLoading = true;
+    private string email = "";
+    private string errorMessage = "";
+
+    private string DisplayNome =>
+        string.IsNullOrWhiteSpace(currentProfile?.Nome) ? "Sem nome" : currentProfile!.Nome!;
+
+    private string DisplayUsername =>
+        string.IsNullOrWhiteSpace(currentProfile?.Username) ? "Sem username" : currentProfile!.Username!;
+
+    private string DisplayTelefone =>
+        string.IsNullOrWhiteSpace(currentProfile?.Telefone) ? "Sem telefone" : currentProfile!.Telefone!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            user = AuthService.GetCurrentUser();
+
+            if (user == null)
+            {
+                Navigation.NavigateTo("/login", true);
+                return;
+            }
+
+            email = user.Email ?? "";
+
+            if (!Guid.TryParse(user.Id, out var parsedUserId))
+            {
+                errorMessage = "Não foi possível identificar o utilizador atual.";
+                return;
+            }
+
+            currentUserId = parsedUserId;
+            await LoadProfile();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadProfile()
+    {
+        if (currentUserId == null)
+            return;
+
+        errorMessage = "";
+
+        try
+        {
+            var response = await Supabase
+                .From<PerfilRow>()
+                .Select("*")
+                .Get();
+
+            currentProfile = response.Models.FirstOrDefault(x => x.Id == currentUserId.Value);
+
+            if (currentProfile == null)
+                errorMessage = "Perfil não encontrado na tabela utilizadores.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar perfil: {ex.Message}";
+        }
+    }
+
+    private string GetInitials()
+    {
+        var baseName = DisplayNome;
+
+        if (string.IsNullOrWhiteSpace(baseName) || baseName == "Sem nome")
+            return "U";
+
+        var partes = baseName
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(p => char.ToUpper(p[0]));
+
+        return string.Concat(partes);
+    }
+
+    [Table("utilizadores")]
+    public class PerfilRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public Guid Id { get; set; }
+
+        [Column("nome")]
+        public string? Nome { get; set; }
+
+        [Column("username")]
+        public string? Username { get; set; }
+
+        [Column("telefone")]
+        public string? Telefone { get; set; }
+    }
+}

@@ -1,0 +1,225 @@
+@page "/favoritos"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode(prerender: false))
+
+@using Supabase.Postgrest.Attributes
+@using Supabase.Postgrest.Models
+@using static Supabase.Postgrest.Constants
+
+@inject Cartly_Blazor.Services.AuthService AuthService
+@inject NavigationManager Navigation
+@inject Supabase.Client Supabase
+
+<div class="home-container">
+
+    <h2 class="section-title">Favoritos ❤️</h2>
+
+    @if (!string.IsNullOrWhiteSpace(infoMessage))
+    {
+        <div class="auth-message success-message page-message">
+            @infoMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="auth-message error-message page-message">
+            @errorMessage
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="category-card">
+            <h4>A carregar favoritos...</h4>
+            <span>Espera só um bocadinho.</span>
+        </div>
+    }
+    else if (!favoriteProducts.Any())
+    {
+        <div class="category-card">
+            <h4>Nenhum favorito ainda</h4>
+            <span>Quando guardares produtos, eles vão aparecer aqui.</span>
+        </div>
+
+        <div style="margin-top:20px;">
+            <button type="button" class="btn-cartly small-btn" @onclick='() => Navigation.NavigateTo("/precos")'>
+                Ver produtos
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="favorites-grid-list">
+            @foreach (var produto in favoriteProducts)
+            {
+                <div class="product-featured product-list-item">
+                    <div class="product-image">❤️</div>
+
+                    <div class="product-info">
+                        <h4>@produto.Nome</h4>
+
+                        <div class="product-meta">
+                            <span><b>Marca:</b> @(string.IsNullOrWhiteSpace(produto.Marca) ? "-" : produto.Marca)</span>
+                            <span><b>Categoria ID:</b> @produto.CategoriaId</span>
+                            <span><b>Quantidade:</b> @(produto.Quantidade?.ToString("0.##") ?? "-") @(produto.Unidade ?? "")</span>
+                        </div>
+
+                        <div class="page-top-actions">
+                            <button type="button"
+                                    class="btn-cartly small-btn secondary-btn"
+                                    @onclick='() => RemoverFavorito(produto.Id)'>
+                                Remover
+                            </button>
+
+                            <button type="button"
+                                    class="btn-cartly small-btn"
+                                    @onclick='() => Navigation.NavigateTo($"/precos?search={Uri.EscapeDataString(produto.Nome ?? "")}")'>
+                                Ver produto
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+</div>
+
+@code {
+    private List<ProductRow> favoriteProducts = new();
+
+    private bool isLoading = true;
+    private string errorMessage = "";
+    private string infoMessage = "";
+    private Guid? currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = AuthService.GetCurrentUser();
+
+        if (user == null)
+        {
+            Navigation.NavigateTo("/login", true);
+            return;
+        }
+
+        if (!Guid.TryParse(user.Id, out var parsedUserId))
+        {
+            errorMessage = "Não foi possível identificar o utilizador atual.";
+            return;
+        }
+
+        currentUserId = parsedUserId;
+        await LoadFavorites();
+    }
+
+    private async Task LoadFavorites()
+    {
+        isLoading = true;
+        errorMessage = "";
+        infoMessage = "";
+
+        try
+        {
+            var favoritosResponse = await Supabase
+                .From<FavoritoRow>()
+                .Select("*")
+                .Filter("utilizador_id", Operator.Equals, currentUserId!.ToString()!)
+                .Get();
+
+            var favoriteIds = favoritosResponse.Models
+                .Select(f => f.ProdutoId)
+                .Distinct()
+                .ToList();
+
+            var productsResponse = await Supabase
+                .From<ProductRow>()
+                .Select("*")
+                .Get();
+
+            favoriteProducts = productsResponse.Models
+                .Where(p => favoriteIds.Contains(p.Id))
+                .OrderBy(p => p.Nome)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar favoritos: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RemoverFavorito(long produtoId)
+    {
+        if (currentUserId == null)
+            return;
+
+        errorMessage = "";
+        infoMessage = "";
+
+        try
+        {
+            await Supabase
+                .From<FavoritoRow>()
+                .Filter("utilizador_id", Operator.Equals, currentUserId.ToString()!)
+                .Filter("produto_id", Operator.Equals, produtoId)
+                .Delete();
+
+            favoriteProducts = favoriteProducts
+                .Where(p => p.Id != produtoId)
+                .ToList();
+
+            infoMessage = "Produto removido dos favoritos.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao remover favorito: {ex.Message}";
+        }
+    }
+
+    [Table("produto")]
+    public class ProductRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public long Id { get; set; }
+
+        [Column("nome")]
+        public string? Nome { get; set; }
+
+        [Column("categoria_id")]
+        public long CategoriaId { get; set; }
+
+        [Column("marca")]
+        public string? Marca { get; set; }
+
+        [Column("codigo_barras")]
+        public string? CodigoBarras { get; set; }
+
+        [Column("unidade")]
+        public string? Unidade { get; set; }
+
+        [Column("quantidade")]
+        public decimal? Quantidade { get; set; }
+    }
+
+    [Table("favoritos")]
+    public class FavoritoRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public long Id { get; set; }
+
+        [Column("utilizador_id")]
+        public Guid UtilizadorId { get; set; }
+
+        [Column("produto_id")]
+        public long ProdutoId { get; set; }
+
+        [Column("created_at")]
+        public DateTime CreatedAt { get; set; }
+    }
+}

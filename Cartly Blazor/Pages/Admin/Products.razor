@@ -1,0 +1,340 @@
+@page "/admin/produtos"
+@page "/admin/products"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode(prerender: false))
+
+@using Supabase.Postgrest.Attributes
+@using Supabase.Postgrest.Models
+@using static Supabase.Postgrest.Constants
+
+@inject Cartly_Blazor.Services.AuthService AuthService
+@inject NavigationManager Navigation
+@inject Supabase.Client Supabase
+
+<div class="admin-container">
+
+    <div class="admin-page-header">
+        <div>
+            <h2 class="admin-title">Produtos</h2>
+            <p class="admin-subtitle">Gestão dos produtos da plataforma.</p>
+        </div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <a href="/admin/produtos/criar" class="btn-cartly profile-link-btn">
+                Criar produto
+            </a>
+
+            <button class="login-btn" @onclick="LoadProducts">
+                Atualizar
+            </button>
+        </div>
+    </div>
+
+    <div class="admin-filters">
+        <div class="admin-search-box">
+            <input class="form-input"
+                   placeholder="Pesquisar por nome, marca ou código de barras..."
+                   @bind="searchTerm"
+                   @bind:event="oninput" />
+        </div>
+
+        <div class="admin-select-box">
+            <select class="form-input" @bind="selectedStoreId">
+                <option value="">Todas as lojas</option>
+                @foreach (var store in stores.OrderBy(s => s.Nome))
+                {
+                    <option value="@store.Id.ToString()">@store.Nome</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    <div class="admin-stats-bar">
+        <div class="admin-stat">
+            <span>Total filtrado</span>
+            <strong>@FilteredProducts.Count()</strong>
+        </div>
+
+        <div class="admin-stat">
+            <span>Total geral</span>
+            <strong>@products.Count</strong>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="admin-empty-state">
+            <h3>A carregar...</h3>
+            <p>A procurar produtos...</p>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="auth-message error-message">
+            @errorMessage
+        </div>
+    }
+    else if (!FilteredProducts.Any())
+    {
+        <div class="admin-empty-state">
+            <h3>👀 Nada encontrado</h3>
+            <p>Não há produtos para os filtros aplicados.</p>
+            <span>Tenta mudar a pesquisa ou a loja selecionada.</span>
+        </div>
+    }
+    else
+    {
+        <div class="admin-table-wrapper">
+            <table class="admin-table">
+                <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Nome</th>
+                    <th>Marca</th>
+                    <th>Categoria ID</th>
+                    <th>Quantidade</th>
+                    <th>Unidade</th>
+                    <th>Código de Barras</th>
+                    <th>Lojas</th>
+                </tr>
+                </thead>
+
+                <tbody>
+                @foreach (var item in FilteredProducts.Select((value, index) => new { value, index }))
+                {
+                    var productStores = GetStoresForProduct(item.value.Id);
+
+                    <tr>
+                        <td>@(item.index + 1)</td>
+                        <td>@(string.IsNullOrWhiteSpace(item.value.Nome) ? "-" : item.value.Nome)</td>
+                        <td>@(string.IsNullOrWhiteSpace(item.value.Marca) ? "-" : item.value.Marca)</td>
+                        <td>@item.value.CategoriaId</td>
+                        <td>@(item.value.Quantidade?.ToString("0.##") ?? "-")</td>
+                        <td>@(string.IsNullOrWhiteSpace(item.value.Unidade) ? "-" : item.value.Unidade)</td>
+                        <td>@(string.IsNullOrWhiteSpace(item.value.CodigoBarras) ? "-" : item.value.CodigoBarras)</td>
+                        <td>
+                            @if (!productStores.Any())
+                            {
+                                <span class="table-muted">Sem registos</span>
+                            }
+                            else
+                            {
+                                <div class="store-badges">
+                                    @foreach (var storeName in productStores)
+                                    {
+                                        <span class="store-badge">@storeName</span>
+                                    }
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+
+</div>
+
+@code {
+    private List<AdminProductRow> products = new();
+    private List<AdminStoreRow> stores = new();
+    private List<ProductStoreLinkRow> productStoreLinks = new();
+
+    private bool isLoading = true;
+    private string errorMessage = "";
+    private string searchTerm = "";
+    private string selectedStoreId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var user = AuthService.GetCurrentUser();
+
+            if (user == null)
+            {
+                Navigation.NavigateTo("/login", true);
+                return;
+            }
+
+            if (!Guid.TryParse(user.Id, out var userId))
+            {
+                Navigation.NavigateTo("/login", true);
+                return;
+            }
+
+            var perfilResponse = await Supabase
+                .From<UtilizadorRow>()
+                .Select("*")
+                .Filter("id", Operator.Equals, userId.ToString())
+                .Get();
+
+            var perfil = perfilResponse.Models.FirstOrDefault();
+
+            if (perfil == null || !string.Equals(perfil.Role, "admin", StringComparison.OrdinalIgnoreCase))
+            {
+                Navigation.NavigateTo("/cliente", true);
+                return;
+            }
+
+            await LoadProducts();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao validar acesso admin: {ex.Message}";
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadProducts()
+    {
+        isLoading = true;
+        errorMessage = "";
+
+        try
+        {
+            var productsResponse = await Supabase
+                .From<AdminProductRow>()
+                .Select("*")
+                .Get();
+
+            var storesResponse = await Supabase
+                .From<AdminStoreRow>()
+                .Select("*")
+                .Get();
+
+            var linksResponse = await Supabase
+                .From<ProductStoreLinkRow>()
+                .Select("produto_id, loja_id")
+                .Get();
+
+            products = productsResponse.Models
+                .OrderBy(p => p.Nome)
+                .ToList();
+
+            stores = storesResponse.Models
+                .OrderBy(s => s.Nome)
+                .ToList();
+
+            productStoreLinks = linksResponse.Models
+                .GroupBy(x => new { x.ProdutoId, x.LojaId })
+                .Select(g => g.First())
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar produtos: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private IEnumerable<AdminProductRow> FilteredProducts =>
+        products.Where(ProductMatchesSearch)
+                .Where(ProductMatchesStore);
+
+    private bool ProductMatchesSearch(AdminProductRow product)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+            return true;
+
+        var term = searchTerm.Trim();
+
+        return (product.Nome?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+               || (product.Marca?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+               || (product.CodigoBarras?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    private bool ProductMatchesStore(AdminProductRow product)
+    {
+        if (string.IsNullOrWhiteSpace(selectedStoreId))
+            return true;
+
+        if (!long.TryParse(selectedStoreId, out var storeId))
+            return true;
+
+        return productStoreLinks.Any(link => link.ProdutoId == product.Id && link.LojaId == storeId);
+    }
+
+    private List<string> GetStoresForProduct(long productId)
+    {
+        var storeIds = productStoreLinks
+            .Where(link => link.ProdutoId == productId)
+            .Select(link => link.LojaId)
+            .Distinct()
+            .ToList();
+
+        return stores
+            .Where(store => storeIds.Contains(store.Id))
+            .Select(store => store.Nome ?? "-")
+            .OrderBy(name => name)
+            .ToList();
+    }
+
+    [Table("utilizadores")]
+    public class UtilizadorRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public Guid Id { get; set; }
+
+        [Column("role")]
+        public string? Role { get; set; }
+    }
+
+    [Table("produto")]
+    public class AdminProductRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public long Id { get; set; }
+
+        [Column("nome")]
+        public string? Nome { get; set; }
+
+        [Column("categoria_id")]
+        public long CategoriaId { get; set; }
+
+        [Column("criado_em")]
+        public DateTime CriadoEm { get; set; }
+
+        [Column("marca")]
+        public string? Marca { get; set; }
+
+        [Column("codigo_barras")]
+        public string? CodigoBarras { get; set; }
+
+        [Column("unidade")]
+        public string? Unidade { get; set; }
+
+        [Column("quantidade")]
+        public decimal? Quantidade { get; set; }
+    }
+
+    [Table("loja")]
+    public class AdminStoreRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public long Id { get; set; }
+
+        [Column("nome")]
+        public string? Nome { get; set; }
+    }
+
+    [Table("registo_preco")]
+    public class ProductStoreLinkRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public long Id { get; set; }
+
+        [Column("produto_id")]
+        public long ProdutoId { get; set; }
+
+        [Column("loja_id")]
+        public long LojaId { get; set; }
+    }
+}

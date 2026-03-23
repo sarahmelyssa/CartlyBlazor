@@ -1,0 +1,276 @@
+@page "/editar-perfil"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode(prerender: false))
+
+@using Supabase.Postgrest.Attributes
+@using Supabase.Postgrest.Models
+
+@inject Cartly_Blazor.Services.AuthService AuthService
+@inject NavigationManager Navigation
+@inject Supabase.Client Supabase
+
+<div class="home-container">
+
+    <div class="edit-profile-header">
+        <div>
+            <h2 class="section-title">Editar Perfil</h2>
+            <p class="edit-profile-subtitle">Atualiza os teus dados pessoais.</p>
+        </div>
+
+        <button type="button"
+                class="btn-cartly small-btn secondary-btn"
+                @onclick='() => Navigation.NavigateTo("/perfil")'>
+            Voltar
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="auth-message success-message page-message">
+            @successMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="auth-message error-message page-message">
+            @errorMessage
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="profile-edit-card">
+            <h4>A carregar dados...</h4>
+            <span>Espera só um bocadinho.</span>
+        </div>
+    }
+    else if (currentProfile == null)
+    {
+        <div class="profile-edit-card">
+            <h4>Perfil não encontrado</h4>
+            <span>Não foi possível carregar os teus dados.</span>
+        </div>
+    }
+    else
+    {
+        <div class="edit-profile-layout">
+
+            <div class="profile-card-main">
+                <div class="profile-avatar">
+                    @GetInitials()
+                </div>
+
+                <div class="profile-main-info">
+                    <h3>@(string.IsNullOrWhiteSpace(editNome) ? "Sem nome" : editNome)</h3>
+                    <p>@email</p>
+                </div>
+            </div>
+
+            <div class="profile-edit-card">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Nome</label>
+                        <input class="form-input" @bind="editNome" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input class="form-input" @bind="editUsername" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input class="form-input" value="@email" disabled />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Telefone</label>
+                        <input class="form-input" @bind="editTelefone" />
+                    </div>
+                </div>
+
+                <div class="profile-actions">
+                    <button type="button"
+                            class="btn-cartly small-btn"
+                            @onclick="SaveProfile"
+                            disabled="@isSaving">
+                        @(isSaving ? "A guardar..." : "Guardar alterações")
+                    </button>
+
+                    <button type="button"
+                            class="btn-cartly small-btn secondary-btn"
+                            @onclick="ResetFields"
+                            disabled="@isSaving">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    }
+
+</div>
+
+@code {
+    private Supabase.Gotrue.User? user;
+    private Guid? currentUserId;
+    private PerfilRow? currentProfile;
+
+    private bool isLoading = true;
+    private bool isSaving = false;
+
+    private string email = "";
+    private string errorMessage = "";
+    private string successMessage = "";
+
+    private string editNome = "";
+    private string editUsername = "";
+    private string editTelefone = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            user = AuthService.GetCurrentUser();
+
+            if (user == null)
+            {
+                Navigation.NavigateTo("/login", true);
+                return;
+            }
+
+            email = user.Email ?? "";
+
+            if (!Guid.TryParse(user.Id, out var parsedUserId))
+            {
+                errorMessage = "Não foi possível identificar o utilizador atual.";
+                return;
+            }
+
+            currentUserId = parsedUserId;
+            await LoadProfile();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao iniciar página: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadProfile()
+    {
+        if (currentUserId == null)
+            return;
+
+        try
+        {
+            var response = await Supabase
+                .From<PerfilRow>()
+                .Select("*")
+                .Get();
+
+            currentProfile = response.Models.FirstOrDefault(x => x.Id == currentUserId.Value);
+
+            if (currentProfile == null)
+            {
+                errorMessage = "Perfil não encontrado na tabela utilizadores.";
+                return;
+            }
+
+            editNome = currentProfile.Nome ?? "";
+            editUsername = currentProfile.Username ?? "";
+            editTelefone = currentProfile.Telefone ?? "";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar perfil: {ex.Message}";
+        }
+    }
+
+    private async Task SaveProfile()
+    {
+        if (currentUserId == null || currentProfile == null)
+        {
+            errorMessage = "Não foi possível identificar o utilizador.";
+            return;
+        }
+
+        isSaving = true;
+        successMessage = "";
+        errorMessage = "";
+
+        try
+        {
+            currentProfile.Nome = string.IsNullOrWhiteSpace(editNome) ? null : editNome.Trim();
+            currentProfile.Username = string.IsNullOrWhiteSpace(editUsername) ? null : editUsername.Trim();
+            currentProfile.Telefone = string.IsNullOrWhiteSpace(editTelefone) ? null : editTelefone.Trim();
+
+            await Supabase.Rpc(
+                "update_user_profile",
+                new Dictionary<string, object?>
+                {
+                    { "p_id", currentUserId.Value },
+                    { "p_nome", currentProfile.Nome },
+                    { "p_username", currentProfile.Username },
+                    { "p_telefone", currentProfile.Telefone }
+                }
+            );
+
+            await LoadProfile();
+            successMessage = "Alterações guardadas com sucesso.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao guardar perfil: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ResetFields()
+    {
+        successMessage = "";
+        errorMessage = "";
+
+        if (currentProfile != null)
+        {
+            editNome = currentProfile.Nome ?? "";
+            editUsername = currentProfile.Username ?? "";
+            editTelefone = currentProfile.Telefone ?? "";
+        }
+    }
+
+    private string GetInitials()
+    {
+        var baseName = string.IsNullOrWhiteSpace(editNome) ? "U" : editNome;
+
+        var parts = baseName
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(x => char.ToUpper(x[0]));
+
+        return string.Concat(parts);
+    }
+
+    [Table("utilizadores")]
+    public class PerfilRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public Guid Id { get; set; }
+
+        [Column("nome")]
+        public string? Nome { get; set; }
+
+        [Column("username")]
+        public string? Username { get; set; }
+
+        [Column("telefone")]
+        public string? Telefone { get; set; }
+    }
+}

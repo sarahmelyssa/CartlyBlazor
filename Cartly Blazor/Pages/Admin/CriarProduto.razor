@@ -1,0 +1,269 @@
+@page "/admin/produtos/criar"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode(prerender: false))
+
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components.Forms
+@using Supabase.Postgrest.Attributes
+@using Supabase.Postgrest.Models
+
+@inject NavigationManager Navigation
+@inject Supabase.Client Supabase
+
+<div class="admin-container">
+
+    <div class="edit-profile-header">
+        <div>
+            <h2 class="admin-title">Criar Produto</h2>
+            <p class="edit-profile-subtitle">Adiciona um novo produto à plataforma.</p>
+        </div>
+
+        <a href="/admin/produtos" class="btn-cartly secondary-btn profile-link-btn">
+            Voltar
+        </a>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="auth-message success-message page-message">
+            @successMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="auth-message error-message page-message">
+            @errorMessage
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="profile-edit-card">
+            <h4>A carregar categorias...</h4>
+            <span>Espera só um bocadinho.</span>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="@form" OnValidSubmit="AddProduto" class="profile-edit-card">
+            <DataAnnotationsValidator />
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Nome</label>
+                    <InputText class="form-input" @bind-Value="form.Nome" />
+                    <ValidationMessage For="@(() => form.Nome)" />
+                </div>
+
+                <div class="form-group">
+                    <label>Marca</label>
+                    <InputText class="form-input" @bind-Value="form.Marca" />
+                </div>
+
+                <div class="form-group">
+                    <label>Categoria</label>
+                    <InputSelect class="form-input" @bind-Value="form.CategoriaIdTexto">
+                        <option value="">Seleciona uma categoria</option>
+                        @foreach (var categoria in categorias.OrderBy(c => c.Nome))
+                        {
+                            <option value="@categoria.Id.ToString()">@categoria.Nome</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="@(() => form.CategoriaIdTexto)" />
+                </div>
+
+                <div class="form-group">
+                    <label>Quantidade</label>
+                    <InputNumber class="form-input" @bind-Value="form.Quantidade" />
+                </div>
+
+                <div class="form-group">
+                    <label>Unidade</label>
+                    <InputText class="form-input" @bind-Value="form.Unidade" placeholder="Ex: L, kg, g, ml" />
+                </div>
+
+                <div class="form-group">
+                    <label>Código de Barras</label>
+                    <InputText class="form-input" @bind-Value="form.CodigoBarras" />
+                </div>
+            </div>
+
+            <div class="profile-actions" style="margin-top:20px;">
+                <button type="submit"
+                        class="btn-cartly"
+                        disabled="@isSaving">
+                    @(isSaving ? "A guardar..." : "Criar produto")
+                </button>
+
+                <button type="button"
+                        class="btn-cartly secondary-btn"
+                        @onclick="LimparCampos"
+                        disabled="@isSaving">
+                    Limpar
+                </button>
+            </div>
+        </EditForm>
+    }
+
+</div>
+
+@code {
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private string successMessage = "";
+    private string errorMessage = "";
+
+    private ProdutoForm form = new();
+    private List<CategoriaRow> categorias = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategorias();
+    }
+
+    private async Task LoadCategorias()
+    {
+        isLoading = true;
+        errorMessage = "";
+        successMessage = "";
+
+        try
+        {
+            var response = await Supabase
+                .From<CategoriaRow>()
+                .Select("*")
+                .Get();
+
+            categorias = response.Models.ToList();
+
+            if (categorias.Any())
+                form.CategoriaIdTexto = categorias.OrderBy(c => c.Nome).First().Id.ToString();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar categorias: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task AddProduto()
+    {
+        successMessage = "";
+        errorMessage = "";
+
+        if (!long.TryParse(form.CategoriaIdTexto, out var categoriaId) || categoriaId <= 0)
+        {
+            errorMessage = "Seleciona uma categoria válida.";
+            return;
+        }
+
+        isSaving = true;
+
+        try
+        {
+            var novoProduto = new ProdutoInsertRow
+            {
+                Nome = form.Nome.Trim(),
+                Marca = string.IsNullOrWhiteSpace(form.Marca) ? null : form.Marca.Trim(),
+                CategoriaId = categoriaId,
+                CriadoEm = DateTime.UtcNow,
+                Quantidade = form.Quantidade,
+                Unidade = string.IsNullOrWhiteSpace(form.Unidade) ? null : form.Unidade.Trim(),
+                CodigoBarras = string.IsNullOrWhiteSpace(form.CodigoBarras) ? null : form.CodigoBarras.Trim()
+            };
+
+            await Supabase
+                .From<ProdutoInsertRow>()
+                .Insert(novoProduto);
+
+            successMessage = "Produto criado com sucesso!";
+            LimparCampos();
+
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(2500);
+                successMessage = "";
+                await InvokeAsync(StateHasChanged);
+            });
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao criar produto: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void LimparCampos()
+    {
+        var categoriaDefault = categorias.Any()
+            ? categorias.OrderBy(c => c.Nome).First().Id.ToString()
+            : "";
+
+        form = new ProdutoForm
+        {
+            CategoriaIdTexto = categoriaDefault
+        };
+
+        errorMessage = "";
+        StateHasChanged();
+    }
+
+    public class ProdutoForm
+    {
+        [Required(ErrorMessage = "O nome do produto é obrigatório.")]
+        public string Nome { get; set; } = "";
+
+        public string? Marca { get; set; } = "";
+
+        [Required(ErrorMessage = "Seleciona uma categoria.")]
+        public string CategoriaIdTexto { get; set; } = "";
+
+        public decimal? Quantidade { get; set; }
+
+        public string? Unidade { get; set; } = "";
+
+        public string? CodigoBarras { get; set; } = "";
+    }
+
+    [Table("produto")]
+    public class ProdutoInsertRow : BaseModel
+    {
+        [Column("nome")]
+        public string Nome { get; set; } = "";
+
+        [Column("categoria_id")]
+        public long CategoriaId { get; set; }
+
+        [Column("criado_em")]
+        public DateTime CriadoEm { get; set; }
+
+        [Column("marca")]
+        public string? Marca { get; set; }
+
+        [Column("codigo_barras")]
+        public string? CodigoBarras { get; set; }
+
+        [Column("unidade")]
+        public string? Unidade { get; set; }
+
+        [Column("quantidade")]
+        public decimal? Quantidade { get; set; }
+    }
+
+    [Table("categoria")]
+    public class CategoriaRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public long Id { get; set; }
+
+        [Column("nome")]
+        public string? Nome { get; set; }
+    }
+}

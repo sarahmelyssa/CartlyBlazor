@@ -1,0 +1,212 @@
+@page "/precos"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode(prerender: false))
+
+@using Microsoft.AspNetCore.WebUtilities
+@using Microsoft.AspNetCore.Components.Web
+@using Supabase.Postgrest.Attributes
+@using Supabase.Postgrest.Models
+
+@inject NavigationManager Navigation
+@inject Supabase.Client Supabase
+
+<div class="home-container">
+
+    <div class="back-button" @onclick='() => Navigation.NavigateTo("/")'>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <path d="M15 18L9 12L15 6"
+              stroke="#d81b60"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round" />
+    </svg>
+</div>
+
+    <section class="hero-section">
+        <h1>Produtos</h1>
+        <p>
+            Explora os produtos disponíveis e consulta o detalhe de cada um.
+        </p>
+
+        <div class="search-wrapper">
+            <input class="search-input"
+                   placeholder="Pesquisar produtos..."
+                   @bind="searchText"
+                   @bind:event="oninput"
+                   @onkeydown="HandleKeyDown" />
+
+            <button type="button" class="btn-cartly" @onclick="Pesquisar">
+                Pesquisar
+            </button>
+        </div>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="auth-message error-message page-message">
+            @errorMessage
+        </div>
+    }
+
+    <h3 class="section-title">Resultados</h3>
+
+    @if (isLoading)
+    {
+        <div class="category-card">
+            <h4>A carregar produtos...</h4>
+            <span>Espera só um bocadinho.</span>
+        </div>
+    }
+    else if (!filteredProducts.Any())
+    {
+        <div class="category-card">
+            <h4>Nenhum produto encontrado</h4>
+            <span>Tenta outro termo de pesquisa.</span>
+        </div>
+    }
+    else
+    {
+        <div class="products-grid">
+            @foreach (var produto in filteredProducts)
+            {
+                <div class="product-card-public">
+                    <div class="product-card-image">
+                        IMG
+                    </div>
+
+                    <div class="product-card-body">
+                        <h4>@produto.Nome</h4>
+
+                        <div class="product-card-meta">
+                            <span><strong>Marca:</strong> @(string.IsNullOrWhiteSpace(produto.Marca) ? "-" : produto.Marca)</span>
+                            <span><strong>Quantidade:</strong> @(produto.Quantidade?.ToString("0.##") ?? "-") @(produto.Unidade ?? "")</span>
+                        </div>
+
+                        <button type="button"
+                                class="btn-cartly small-btn"
+                                @onclick='() => Navigation.NavigateTo($"/produto/{produto.Id}")'>
+                            Ver produto
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+</div>
+
+@code {
+    private List<ProductRow> allProducts = new();
+    private List<ProductRow> filteredProducts = new();
+
+    private bool isLoading = true;
+    private string errorMessage = "";
+    private string searchText = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        LerQueryString();
+        await LoadProducts();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        LerQueryString();
+        await LoadProducts();
+    }
+
+    private void LerQueryString()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("search", out var value))
+            searchText = value.ToString();
+    }
+
+    private async Task LoadProducts()
+    {
+        isLoading = true;
+        errorMessage = "";
+
+        try
+        {
+            var response = await Supabase
+                .From<ProductRow>()
+                .Select("*")
+                .Get();
+
+            allProducts = response.Models.ToList();
+            AplicarFiltro();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar produtos: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void AplicarFiltro()
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            filteredProducts = allProducts
+                .OrderBy(p => p.Nome)
+                .ToList();
+            return;
+        }
+
+        var termo = searchText.Trim().ToLower();
+
+        filteredProducts = allProducts
+            .Where(p =>
+                (p.Nome?.ToLower().Contains(termo) ?? false) ||
+                (p.Marca?.ToLower().Contains(termo) ?? false))
+            .OrderBy(p => p.Nome)
+            .ToList();
+    }
+
+    private void Pesquisar()
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            Navigation.NavigateTo("/precos", true);
+            return;
+        }
+
+        Navigation.NavigateTo($"/precos?search={Uri.EscapeDataString(searchText.Trim())}", true);
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            Pesquisar();
+    }
+
+    [Table("produto")]
+    public class ProductRow : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        [Column("id")]
+        public long Id { get; set; }
+
+        [Column("nome")]
+        public string? Nome { get; set; }
+
+        [Column("categoria_id")]
+        public long CategoriaId { get; set; }
+
+        [Column("marca")]
+        public string? Marca { get; set; }
+
+        [Column("codigo_barras")]
+        public string? CodigoBarras { get; set; }
+
+        [Column("unidade")]
+        public string? Unidade { get; set; }
+
+        [Column("quantidade")]
+        public decimal? Quantidade { get; set; }
+    }
+}

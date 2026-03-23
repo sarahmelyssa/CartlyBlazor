@@ -1,0 +1,260 @@
+@page "/"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode(prerender: false))
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="home-container">
+
+    <!-- HERO -->
+    <section class="hero-section">
+        <h1>Compare preços de forma rápida e inteligente</h1>
+        <p>
+            Descubra rapidamente onde os produtos estão mais baratos e consulte detalhes antes de comprar.
+        </p>
+
+        <div class="search-wrapper modern-search">
+            <input class="search-input modern-search-input"
+                placeholder="Pesquisar produtos..."
+                @bind="searchText"
+                @bind:event="oninput"
+                @onkeydown="HandleKeyDown" />
+
+            <button type="button" class="search-icon-btn" @onclick="Pesquisar" aria-label="Pesquisar">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                    <circle cx="11" cy="11" r="7" stroke="white" stroke-width="2.5" />
+                    <path d="M20 20L16.65 16.65" stroke="white" stroke-width="2.5" stroke-linecap="round" />
+                </svg>
+            </button>
+        </div>
+
+        <div style="margin-top:15px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+            <button class="btn-cartly secondary-btn small-btn"
+                    @onclick='() => Navigation.NavigateTo("/precos?search=Água")'>Água</button>
+
+            <button class="btn-cartly secondary-btn small-btn"
+                    @onclick='() => Navigation.NavigateTo("/precos?search=Arroz")'>Arroz</button>
+
+            <button class="btn-cartly secondary-btn small-btn"
+                    @onclick='() => Navigation.NavigateTo("/precos?search=Atum")'>Atum</button>
+
+            <button class="btn-cartly secondary-btn small-btn"
+                    @onclick='() => Navigation.NavigateTo("/precos?search=Café")'>Café</button>
+        </div>
+    </section>
+
+    <!-- CATEGORIAS -->
+    <h3 class="section-title">Explorar categorias</h3>
+
+    <div class="categories-grid">
+    <div class="category-card" @onclick='() => Navigation.NavigateTo("/precos?search=Água")'>
+        <div class="category-icon">
+            <img src="coffee.svg" alt="Bebidas" />
+        </div>
+        <h4>Bebidas</h4>
+        <span>Água, sumos e refrigerantes</span>
+    </div>
+
+    <div class="category-card" @onclick='() => Navigation.NavigateTo("/precos?search=Arroz")'>
+        <div class="category-icon">
+            <img src="package.svg" alt="Mercearia" />
+        </div>
+        <h4>Mercearia</h4>
+        <span>Arroz, massa e essenciais</span>
+    </div>
+
+    <div class="category-card" @onclick='() => Navigation.NavigateTo("/precos?search=Atum")'>
+        <div class="category-icon">
+            <img src="shopping-bag.svg" alt="Conservas" />
+        </div>
+        <h4>Conservas</h4>
+        <span>Atum, feijão e mais</span>
+    </div>
+
+    <div class="category-card" @onclick='() => Navigation.NavigateTo("/precos?search=Café")'>
+        <div class="category-icon">
+            <img src="milk.svg" alt="Pequeno-almoço" />
+        </div>
+        <h4>Pequeno-almoço</h4>
+        <span>Café, cereais e bolachas</span>
+    </div>
+</div>
+
+    <!-- PRODUTO DESTAQUE -->
+    <!-- PRODUTOS EM DESTAQUE -->
+<div class="featured-products-header">
+    <h3 class="section-title" style="margin: 0;">Produtos em destaque</h3>
+</div>
+
+<div class="featured-products-grid">
+
+    <!-- ÁGUA -->
+    <div class="featured-product-card" @onclick='() => Navigation.NavigateTo("/precos?search=Água")'>
+        <div class="featured-product-image">
+            <img src="agua.jpg" alt="Água Luso 1.5L" />
+        </div>
+        <div class="featured-product-body">
+            <h4>Água Luso 1.5L</h4>
+            <p>Água mineral natural</p>
+            <div class="featured-price-label">Desde</div>
+            <div class="featured-price">0,69€</div>
+            <button class="featured-product-btn">Ver preços</button>
+        </div>
+    </div>
+
+    <!-- BISCOFF -->
+    <div class="featured-product-card" @onclick='() => Navigation.NavigateTo("/precos?search=Biscoff")'>
+        <div class="featured-product-image">
+            <img src="biscoff.jpg" alt="Bolachas Biscoff" />
+        </div>
+        <div class="featured-product-body">
+            <h4>Bolachas Biscoff</h4>
+            <p>Bolachas caramelizadas</p>
+            <div class="featured-price-label">Desde</div>
+            <div class="featured-price">1,99€</div>
+            <button class="featured-product-btn">Ver preços</button>
+        </div>
+    </div>
+
+    <!-- ESPARGUETE -->
+    <div class="featured-product-card" @onclick='() => Navigation.NavigateTo("/precos?search=Esparguete")'>
+        <div class="featured-product-image">
+            <img src="esparguete.jpg" alt="Massa Esparguete" />
+        </div>
+        <div class="featured-product-body">
+            <h4>Massa Esparguete</h4>
+            <p>Massa alimentar clássica</p>
+            <div class="featured-price-label">Desde</div>
+            <div class="featured-price">0,89€</div>
+            <button class="featured-product-btn">Ver preços</button>
+        </div>
+    </div>
+
+    <!-- CAFÉ -->
+    <div class="featured-product-card" @onclick='() => Navigation.NavigateTo("/precos?search=Café")'>
+        <div class="featured-product-image">
+            <img src="cafe.jpg" alt="Café" />
+        </div>
+        <div class="featured-product-body">
+            <h4>Café</h4>
+            <p>Café torrado moído</p>
+            <div class="featured-price-label">Desde</div>
+            <div class="featured-price">2,49€</div>
+            <button class="featured-product-btn">Ver preços</button>
+        </div>
+    </div>
+
+</div>
+
+   <!-- EXPLORAR RAPIDAMENTE -->
+<div class="featured-products-header">
+    <h3 class="section-title" style="margin: 0;">Explorar rapidamente</h3>
+</div>
+
+<div class="quick-products-grid">
+
+    <div class="quick-product-card" @onclick='() => Navigation.NavigateTo("/precos?search=Água")'>
+        <div class="quick-product-image">
+            <img src="agua.jpg" alt="Água Luso 1.5L" />
+        </div>
+        <div class="quick-product-body">
+            <h4>Água Luso 1.5L</h4>
+            <p>Ver detalhe completo do produto.</p>
+            <button type="button" class="quick-product-btn">Ver produto</button>
+        </div>
+    </div>
+
+    <div class="quick-product-card" @onclick='() => Navigation.NavigateTo("/precos?search=Arroz")'>
+        <div class="quick-product-image">
+            <img src="arroz.jpg" alt="Arroz" />
+        </div>
+        <div class="quick-product-body">
+            <h4>Arroz</h4>
+            <p>Comparar preços rapidamente.</p>
+            <button type="button" class="quick-product-btn">Ver preços</button>
+        </div>
+    </div>
+
+    <div class="quick-product-card" @onclick='() => Navigation.NavigateTo("/precos?search=Atum")'>
+        <div class="quick-product-image">
+            <img src="atum.jpg" alt="Atum" />
+        </div>
+        <div class="quick-product-body">
+            <h4>Atum</h4>
+            <p>Ver produtos do dia a dia.</p>
+            <button type="button" class="quick-product-btn">Ver preços</button>
+        </div>
+    </div>
+
+    <div class="quick-product-card" @onclick='() => Navigation.NavigateTo("/precos?search=Biscoff")'>
+        <div class="quick-product-image">
+            <img src="biscoff.jpg" alt="Bolachas Biscoff" />
+        </div>
+        <div class="quick-product-body">
+            <h4>Bolachas Biscoff</h4>
+            <p>Descobrir rapidamente onde comprar.</p>
+            <button type="button" class="quick-product-btn">Ver preços</button>
+        </div>
+    </div>
+
+    <div class="quick-product-card" @onclick='() => Navigation.NavigateTo("/precos?search=Esparguete")'>
+        <div class="quick-product-image">
+            <img src="esparguete.jpg" alt="Massa Esparguete" />
+        </div>
+        <div class="quick-product-body">
+            <h4>Massa Esparguete</h4>
+            <p>Comparar preços do dia a dia.</p>
+            <button type="button" class="quick-product-btn">Ver preços</button>
+        </div>
+    </div>
+
+    <div class="quick-product-card" @onclick='() => Navigation.NavigateTo("/precos?search=Café")'>
+        <div class="quick-product-image">
+            <img src="cafe.jpg" alt="Café" />
+        </div>
+        <div class="quick-product-body">
+            <h4>Café</h4>
+            <p>Encontrar rapidamente o melhor preço.</p>
+            <button type="button" class="quick-product-btn">Ver preços</button>
+        </div>
+    </div>
+
+</div>
+
+</div>
+
+@code {
+    private string searchText = "";
+
+    private void Pesquisar()
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            Navigation.NavigateTo("/precos");
+            return;
+        }
+
+        Navigation.NavigateTo($"/precos?search={Uri.EscapeDataString(searchText.Trim())}");
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            Pesquisar();
+    }
+    
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        var uri = new Uri(Navigation.Uri);
+        var fragment = uri.Fragment;
+
+        if (!string.IsNullOrWhiteSpace(fragment) &&
+            fragment.Contains("access_token=") &&
+            fragment.Contains("type=recovery"))
+        {
+            Navigation.NavigateTo($"/nova-password{fragment}", true);
+        }
+    }
+}

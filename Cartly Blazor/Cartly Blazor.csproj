@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>Cartly_Blazor</RootNamespace>
+        <AssemblyName>Cartly_Blazor</AssemblyName>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.4" />
+        <PackageReference Include="Supabase" Version="1.1.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Models\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Remove="Components\Layout\NavMenu.razor" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <_ContentIncludedByDefault Remove="Pages\Login\Admin\LoginAdmin.razor" />
+      <_ContentIncludedByDefault Remove="Pages\Login\Cliente\LoginCliente.razor" />
+      <_ContentIncludedByDefault Remove="Pages\Login\Cliente\RegisterCliente.razor" />
+      <_ContentIncludedByDefault Remove="Pages\Login\LoginPage.razor" />
+      <_ContentIncludedByDefault Remove="Pages\Admin\PriceRecords\PriceRecords.razor" />
+      <_ContentIncludedByDefault Remove="Pages\Admin\Dashboard\Dashboard.razor" />
+      <_ContentIncludedByDefault Remove="Pages\Admin\Products\Products.razor" />
+      <_ContentIncludedByDefault Remove="Pages\Admin\Stats\Stats.razor" />
+      <_ContentIncludedByDefault Remove="Pages\Admin\Stores\Stores.razor" />
+      <_ContentIncludedByDefault Remove="Pages\Admin\Users\Users.razor" />
+    </ItemGroup>
+
+</Project>
